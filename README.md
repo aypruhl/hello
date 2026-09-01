@@ -73,12 +73,6 @@ mingw32-make
 
 The output executable (`nuke_lol.exe`) will be renamed to `nuke_lol.exe.danger` to prevent accidental execution.
 
-# Static Linking
-To avoid missing DLL errors on target machines, the executable is built with:
-```cmake
-target_link_options(nuke_lol PRIVATE -static-libgcc -static-libstdc++ -static)
-```
-
 # Testing
 1. Set up a Windows VM (using VirtualBox, QEMU, etc.)
 2. Take a snapshot
