@@ -85,4 +85,4 @@ The output executable (`nuke_lol.exe`) will be renamed to `nuke_lol.exe.danger` 
 
 The techniques demonstrated here are well-known in the security community and are useful for understanding how bootkits and UEFI malware operate. By studying this code, you can better defend against real-world threats.
 
-**Do NOT use this maliciously.** The author assumes no liability for any misuse.
+**Do NOT use this maliciously.** The author (me) assumes no liability for any misuse.
