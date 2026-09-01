@@ -1,0 +1,11 @@
+[package]
+name = "test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+uefi = "0.37.0"          # The main UEFI crate
+rlibc = "1.0"            # Provides C‑language intrinsics (needed for no_std)
+
+[build]
+target = "x86_64-unknown-uefi"
